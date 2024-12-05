@@ -3,7 +3,6 @@ import shutil
 
 from dotenv import load_dotenv
 
-
 def create_dir_with_resumes_by_label(origin, destination, extenssion, multilabel=True):
     if os.path.isdir(destination):
         shutil.rmtree(destination)
@@ -32,21 +31,15 @@ def create_dir_with_resumes_by_label(origin, destination, extenssion, multilabel
 
             shutil.copy(origin + "/" + fileName, dir)
 
+def print_dir(path):
+    folders = [name for name in os.listdir(path) if os.path.isdir(os.path.join(path, name))]
 
-def print_dictionary(dic):
-    data = []
+    print("\nQuantity resumes/Folder created: \n")
+    for folder in folders:
+        count = sum(1 for name in os.listdir(path + "/" + folder) if os.path.isfile(os.path.join(path + "/" + folder, name)))
+        print(count, folder)
 
-    for key in dic.keys():
-        data.append((len(dic[key]), key))
-
-    data = sorted(data, key=lambda x: x[0])
-
-    for quantity, label in data:
-        print("{:4} - {}".format(quantity, label))
-
-    total = sum(item[0] for item in data)
-    print("\nTotal: {}".format(total))
-
+    print()
 
 def main():
     path = "./resumes"
@@ -54,7 +47,7 @@ def main():
     extenssion = ".lab"
 
     create_dir_with_resumes_by_label(path, resultPath, extenssion, False)
-
+    print_dir(resultPath)
 
 if __name__ == "__main__":
     load_dotenv()
