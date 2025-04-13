@@ -1,0 +1,8 @@
+.env
+
+__pycache__
+chroma/
+chroma_v1
+venv
+resumes
+

@@ -1,0 +1,10 @@
+{
+    "filtered": {
+        "tokens": 41294583,
+        "characters": 200814853
+    },
+    "llm": {
+        "tokens": 10310272,
+        "characters": 45779030
+    }
+}
