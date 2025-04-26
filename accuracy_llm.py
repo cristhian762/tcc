@@ -1,163 +1,91 @@
 import json
-import openai
-import os
-import re
-
-from chroma import search_chroma
-from dotenv import load_dotenv
 
 
-def sambanova(query, resumes, model):
-    client = openai.OpenAI(
-        api_key=os.getenv("SAMBANOVA_API_KEY"),
-        base_url="https://api.sambanova.ai/v1",
-    )
+def sanitize(models):
+    for model in models:
+        for resume in models[model]:
+            for result in models[model][resume]:
+                if result == "limit tokens":
+                    models[model][resume] = []
+                    continue
 
-    content = ""
+                if result == "json invalid":
+                    models[model][resume] = []
+                    continue
 
-    for i in range(0, len(resumes["ids"][0])):
-        content += "resume_id: " + resumes["ids"][0][i] + "\n"
-        content += resumes["documents"][0][i] + "\n\n"
-        content += "---\n"
+                if len(models[model][resume]) > 5:
+                    models[model][resume] = models[model][resume][0:5]
 
-    prompt = """
-I will provide you with one base resume and 20 other resumes.
-Your task is to compare the 20 resumes to the base resume and identify the 5 most similar ones based on content, skills, 
-experience, and overall relevance.
-
-Each resume will have a unique identifier in the format: `resume_id: <ID>`.
-
-At the end, return a JSON object containing only the 5 most similar resume IDs, sorted from most to least similar.
-
-Format the output strictly like this:
-{
-  "most_similar_resume_ids": ["<ID1>", "<ID2>", "<ID3>", "<ID4>", "<ID5>"]
-}
-
-Do not include any explanation, only the JSON response.
-
-Here is the base resume:
----
-"""
-    prompt += query
-    prompt += f"""
----
-
-And here are the 10 other resumes:
----
-{content}
-"""
-
-    response = client.chat.completions.create(
-        model=model,
-        messages=[
-            {
-                "role": "system",
-                "content": (
-                    "You are an expert in natural language processing and resume analysis. "
-                    "Your task is to compare resumes and return only the most relevant ones in JSON format, "
-                    "based strictly on the user's instructions."
-                ),
-            },
-            {"role": "user", "content": prompt},
-        ],
-        temperature=0.1,
-        top_p=0.1,
-    )
-
-    try:
-        return response.choices[0].message.content
-    except Exception as e:
-        print("Resposta inválida")
-        print(response)
-        return ""
+    return models
 
 
-def main():
-    models = [
+def accuracy(models):
+    model_names = [
         "Meta-Llama-3.2-1B-Instruct",
         "Meta-Llama-3.1-8B-Instruct",
         "Meta-Llama-3.3-70B-Instruct",
         "Llama-4-Scout-17B-16E-Instruct",
     ]
 
-    with open("separator_for_test.json", "r", encoding="utf-8") as file:
-        test = json.load(file)
+    dic = {}
 
-    if not os.path.isfile("sambanova_results.json"):
-        with open("sambanova_results.json", "w", encoding="utf-8") as file:
-            json.dump({}, file, indent=2)
+    for model_name in model_names:
+        with open("separator_for_test.json", "r", encoding="utf-8") as file:
+            test = json.load(file)
 
+        accuracy = 0
+
+        n_results_array = [1, 5]
+
+        for n_results in n_results_array:
+            accuracy = 0
+
+            for name in test:
+                with open(
+                    "resumes/original/" + name + ".lab", "r", encoding="windows-1252"
+                ) as file:
+                    labels = file.read().replace("\n", ",").split(",")
+
+                results = models[model_name][name][0:n_results]
+
+                hits = 0
+
+                for label in labels:
+                    for item in results:
+                        with open(
+                            "resumes/original/" + item + ".lab",
+                            "r",
+                            encoding="windows-1252",
+                        ) as file:
+                            itemLabels = file.read().replace("\n", ",").split(",")
+
+                        if label in itemLabels:
+                            hits += 1
+
+                accuracy += hits / len(labels)
+
+            total_accuracy = accuracy / len(test) / n_results
+
+            print(
+                "Número de resultados {} Acurácia {}".format(n_results, total_accuracy)
+            )
+
+            if model_name not in dic.keys():
+                dic[model_name] = {}
+
+            dic[model_name][n_results] = total_accuracy
+
+    with open("accuracy_llm.json", "w") as file:
+        json.dump(dic, file, indent=2)
+
+
+def main():
     with open("sambanova_results.json", "r", encoding="utf-8") as file:
-        sambanova_results = json.load(file)
+        models = json.load(file)
 
-    for model in models:
-        print(f"Analisando com modelo {model}")
-
-        for name in test:
-            if (
-                model in sambanova_results
-                and name in sambanova_results[model]
-                and sambanova_results[model][name][0] != "limit tokens"
-            ):
-                continue
-
-            print(f"Analisando currículo {name}")
-
-            with open(
-                "resumes/original/" + name + ".txt", "r", encoding="windows-1252"
-            ) as file:
-                content = file.read().replace("\n", ",")
-
-            chromadb = search_chroma(content, 10)
-
-            if model not in sambanova_results.keys():
-                sambanova_results[model] = {}
-
-            try:
-                result = sambanova(
-                    content,
-                    {"ids": chromadb["ids"], "documents": chromadb["documents"]},
-                    model,
-                )
-            except Exception as e:
-                print(e)
-                print(f"O currículo {name} atingiu o limite de tokens")
-                sambanova_results[model][name] = ["limit tokens"]
-
-                with open("sambanova_results.json", "w", encoding="utf-8") as file:
-                    json.dump(sambanova_results, file, indent=2)
-
-                continue
-
-            if not result:
-                continue
-
-            match = re.search(r"{(.|\n)*?}", result)
-
-            if match:
-                result = match.group(0)
-
-            try:
-                result = json.loads(result)
-            except Exception as e:
-                print(f"O currículo {name} não teve um json como resposta")
-                sambanova_results[model][name] = ["json invalid"]
-
-                with open("sambanova_results.json", "w", encoding="utf-8") as file:
-                    json.dump(sambanova_results, file, indent=2)
-
-                continue
-
-            if not isinstance(result, dict) or "most_similar_resume_ids" not in result:
-                continue
-
-            sambanova_results[model][name] = result["most_similar_resume_ids"]
-
-            with open("sambanova_results.json", "w", encoding="utf-8") as file:
-                json.dump(sambanova_results, file, indent=2)
+    models = sanitize(models)
+    accuracy(models)
 
 
 if __name__ == "__main__":
-    load_dotenv()
     main()

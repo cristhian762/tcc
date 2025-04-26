@@ -6,5 +6,9 @@
     "llm": {
         "tokens": 10310272,
         "characters": 45779030
+    },
+    "pegasus": {
+        "tokens": 1006593,
+        "characters": 5194230
     }
 }
