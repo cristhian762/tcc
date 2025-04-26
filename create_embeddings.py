@@ -46,9 +46,8 @@ def collection_add(collection, model_name):
     with open("separator_for_test.json", "r", encoding="utf-8") as file:
         test = json.load(file)
 
-    resumes_path = "./resumes/llm/"
-    # files_name = os.listdir(resumes_path)
-    files_name = ['18786.txt']
+    resumes_path = "./resumes/pegasus/"
+    files_name = os.listdir(resumes_path)
 
     ids = []
     metadatas = []
@@ -63,9 +62,7 @@ def collection_add(collection, model_name):
         if name in test:
             continue
 
-        with open(
-            os.path.join(resumes_path, file_name), "r", encoding="utf-8"
-        ) as file:
+        with open(os.path.join(resumes_path, file_name), "r", encoding="utf-8") as file:
             content = file.read().replace("\n", ",")
 
         with open(
@@ -134,8 +131,6 @@ def main():
 
         collection_name = f"collection_{model_name}"
 
-        collections = client.list_collections()
-
         model = SentenceTransformer(model_name)
         embedding_dim = model.get_sentence_embedding_dimension()
 
@@ -144,62 +139,6 @@ def main():
         )
 
         collection_add(collection, model_name)
-        continue
-        if model_name not in collections:
-            print("\nAdicionando currículos ao chromadb ...")
-            collection_add(collection, model_name)
-        else:
-            print("\nColeção encontrada")
-
-        continue
-
-        with open("separator_for_test.json", "r", encoding="utf-8") as file:
-            test = json.load(file)
-
-        name = random.choice(test)
-
-        with open(
-            "resumes/original/" + name + ".txt", "r", encoding="windows-1252"
-        ) as file:
-            content = file.read().replace("\n", ",")
-
-        with open(
-            "resumes/original/" + name + ".lab", "r", encoding="windows-1252"
-        ) as file:
-            labels = file.read().replace("\n", ",")
-
-        results = collection.query(
-            query_texts=[
-                "Considering the following resume, find the one that best matches it. Curriculum: "
-                + content
-            ],
-            n_results=1,
-        )
-
-        hits = 0
-
-        for label in labels.split(","):
-            metadata = results["metadatas"]
-
-            if not isinstance(metadata, list):
-                continue
-
-            for item in metadata[0]:
-                if not isinstance(item, dict):
-                    continue
-
-                if not isinstance(item["label"], str):
-                    continue
-
-                if label in item["label"].split(","):
-                    hits += 1
-
-        accuracy = hits / len(labels.split(","))
-
-        print(model_name)
-        print("Arquivo de test selecionado: {}; rotulo(s): {}".format(name, labels))
-        print(results["metadatas"])
-        print("Acurácia {}".format(accuracy))
 
 
 if __name__ == "__main__":

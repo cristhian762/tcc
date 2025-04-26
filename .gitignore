@@ -1,8 +1,8 @@
 .env
 
 __pycache__
+chroma_*/
 chroma/
-chroma_v1
 venv
 resumes
 

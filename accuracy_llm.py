@@ -1,6 +1,7 @@
 import json
 import openai
 import os
+import re
 
 from chroma import search_chroma
 from dotenv import load_dotenv
@@ -42,7 +43,7 @@ Here is the base resume:
     prompt += f"""
 ---
 
-And here are the 20 other resumes:
+And here are the 10 other resumes:
 ---
 {content}
 """
@@ -64,16 +65,20 @@ And here are the 20 other resumes:
         top_p=0.1,
     )
 
-    return response.choices[0].message.content
+    try:
+        return response.choices[0].message.content
+    except Exception as e:
+        print("Resposta inválida")
+        print(response)
+        return ""
 
 
 def main():
     models = [
         "Meta-Llama-3.2-1B-Instruct",
-        "Meta-Llama-3.2-3B-Instruct",
         "Meta-Llama-3.1-8B-Instruct",
         "Meta-Llama-3.3-70B-Instruct",
-        "Meta-Llama-3.1-405B-Instruct",
+        "Llama-4-Scout-17B-16E-Instruct",
     ]
 
     with open("separator_for_test.json", "r", encoding="utf-8") as file:
@@ -90,7 +95,11 @@ def main():
         print(f"Analisando com modelo {model}")
 
         for name in test:
-            if model in sambanova_results and name in sambanova_results[model]:
+            if (
+                model in sambanova_results
+                and name in sambanova_results[model]
+                and sambanova_results[model][name][0] != "limit tokens"
+            ):
                 continue
 
             print(f"Analisando currículo {name}")
@@ -100,7 +109,10 @@ def main():
             ) as file:
                 content = file.read().replace("\n", ",")
 
-            chromadb = search_chroma(content, 20)
+            chromadb = search_chroma(content, 10)
+
+            if model not in sambanova_results.keys():
+                sambanova_results[model] = {}
 
             try:
                 result = sambanova(
@@ -121,6 +133,11 @@ def main():
             if not result:
                 continue
 
+            match = re.search(r"{(.|\n)*?}", result)
+
+            if match:
+                result = match.group(0)
+
             try:
                 result = json.loads(result)
             except Exception as e:
@@ -134,9 +151,6 @@ def main():
 
             if not isinstance(result, dict) or "most_similar_resume_ids" not in result:
                 continue
-
-            if model not in sambanova_results.keys():
-                sambanova_results[model] = {}
 
             sambanova_results[model][name] = result["most_similar_resume_ids"]
 
